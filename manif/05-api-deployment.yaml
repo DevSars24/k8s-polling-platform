@@ -1,0 +1,81 @@
+## ------------------------------------------------------------------
+## Kubernetes Deployment: Go REST API  (2 Replicas)
+## ------------------------------------------------------------------
+## This runs the Go (Golang) API that sits between the Frontend and
+## MongoDB. It exposes endpoints:
+##   GET  /ok              → Health check (used by probes below)
+##   GET  /languages       → List all programming languages
+##   GET  /languages/{name}→ Get details for one language
+##   POST /languages/{name}→ Increment vote count for a language
+##
+## KEY CONCEPTS IN THIS FILE:
+##   RollingUpdate     → Deploys new versions without downtime.
+##   secretKeyRef      → Pulls credentials from the Secret created
+##                        in step 02 so they never appear in code.
+##   livenessProbe     → Kubernetes restarts the Pod if /ok fails.
+##   readinessProbe    → Kubernetes stops sending traffic to the Pod
+##                        until /ok succeeds.
+## ------------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: polling-platform
+  labels:
+    project: k8s-polling-platform
+    component: backend
+    role: api
+    env: demo
+spec:
+  replicas: 2                         # Two Pods for high availability
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                     # 1 extra Pod during rollout
+      maxUnavailable: 25%             # At most 25% Pods unavailable
+  selector:
+    matchLabels:
+      role: api
+  template:
+    metadata:
+      labels:
+        role: api
+    spec:
+      containers:
+        - name: api
+          image: cloudacademydevops/api:v3
+          imagePullPolicy: Always
+
+          ## --- Environment Variables ---
+          env:
+            - name: MONGO_CONN_STR
+              value: mongodb://mongo-0.mongo,mongo-1.mongo,mongo-2.mongo:27017/langdb?replicaSet=rs0
+            - name: MONGO_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret       # From 02-mongo-secret.yaml
+                  key: username
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: password
+
+          ports:
+            - containerPort: 8080
+
+          ## --- Health Probes ---
+          livenessProbe:
+            httpGet:
+              path: /ok
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ok
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            successThreshold: 1

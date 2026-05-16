@@ -1,0 +1,70 @@
+## ------------------------------------------------------------------
+## Kubernetes Deployment: React Frontend  (2 Replicas)
+## ------------------------------------------------------------------
+## This runs the React + JavaScript web UI that users see in their
+## browser. It displays the six programming languages and lets
+## users click "+1" to cast a vote.
+##
+## The environment variable REACT_APP_APIHOSTPORT tells the
+## Frontend WHERE the API is. This value must be the API's
+## Load Balancer public DNS name (set after deploying 06-api-service).
+##
+## KEY CONCEPTS:
+##   replicas: 2       → Two copies for high availability.
+##   RollingUpdate      → Zero-downtime deployments.
+##   livenessProbe      → Auto-restart if the Pod becomes unhealthy.
+##   readinessProbe     → Only send traffic after the Pod is ready.
+## ------------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: polling-platform
+  labels:
+    project: k8s-polling-platform
+    component: frontend
+    role: frontend
+    env: demo
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      role: frontend
+  template:
+    metadata:
+      labels:
+        role: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: cloudacademydevops/frontend:v11
+          imagePullPolicy: Always
+          env:
+            - name: REACT_APP_APIHOSTPORT
+              ## ⚠️  Replace this with your API LoadBalancer DNS:
+              ##     kubectl get svc api -n polling-platform \
+              ##       -ojsonpath="{.status.loadBalancer.ingress[0].hostname}"
+              value: $API_ELB_PUBLIC_FQDN
+          ports:
+            - containerPort: 8080
+
+          ## --- Health Probes ---
+          livenessProbe:
+            httpGet:
+              path: /ok
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ok
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            successThreshold: 1

@@ -1,0 +1,36 @@
+## ------------------------------------------------------------------
+## Kubernetes Headless Service: MongoDB
+## ------------------------------------------------------------------
+## A "Headless Service" (clusterIP: None) does NOT load-balance.
+## Instead it creates DNS A-records for EACH Pod individually:
+##
+##   mongo-0.mongo.polling-platform.svc.cluster.local
+##   mongo-1.mongo.polling-platform.svc.cluster.local
+##   mongo-2.mongo.polling-platform.svc.cluster.local
+##
+## The MongoDB connection string in the API deployment uses these
+## DNS names so it can talk to every member of the replica set.
+##
+## WHY Headless?
+##   MongoDB clients must connect to SPECIFIC members (the Primary
+##   for writes, Secondaries for reads). A normal load-balanced
+##   Service would randomly send traffic and break replication.
+## ------------------------------------------------------------------
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: polling-platform
+  labels:
+    project: k8s-polling-platform
+    component: database
+    role: db
+    env: demo
+spec:
+  ports:
+    - port: 27017
+      targetPort: 27017
+  clusterIP: None                     # ← This makes it "Headless"
+  selector:
+    role: db                          # Matches Pods from the StatefulSet

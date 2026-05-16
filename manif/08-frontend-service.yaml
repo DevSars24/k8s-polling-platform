@@ -1,0 +1,32 @@
+## ------------------------------------------------------------------
+## Kubernetes Service: Frontend (LoadBalancer)
+## ------------------------------------------------------------------
+## Exposes the React Frontend Pods to the internet via a cloud
+## Load Balancer. Users open this URL in their browser.
+##
+## Traffic flow:
+##   Browser → ELB (port 80) → Service → Pod (port 8080)
+##
+## After applying this Service, Kubernetes will provision an ELB.
+## Run the following command to get the public URL:
+##   kubectl get svc frontend -n polling-platform \
+##     -ojsonpath="{.status.loadBalancer.ingress[0].hostname}"
+## ------------------------------------------------------------------
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: polling-platform
+  labels:
+    project: k8s-polling-platform
+    component: frontend
+    app: frontend
+spec:
+  selector:
+    role: frontend                    # Must match the Deployment's Pod labels
+  ports:
+    - protocol: TCP
+      port: 80                        # External port
+      targetPort: 8080                # Container port inside the Pod
+  type: LoadBalancer

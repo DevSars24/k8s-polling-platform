@@ -1,0 +1,15 @@
+## ------------------------------------------------------------------
+## Kubernetes Namespace: polling-platform
+## ------------------------------------------------------------------
+## A Namespace creates an isolated virtual cluster inside your
+## physical Kubernetes cluster. All resources for this project live
+## here so they don't collide with resources from other projects.
+## ------------------------------------------------------------------
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: polling-platform
+  labels:
+    project: k8s-polling-platform
+    env: demo

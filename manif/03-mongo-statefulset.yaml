@@ -1,0 +1,89 @@
+## ------------------------------------------------------------------
+## Kubernetes StatefulSet: MongoDB Replica Set (3 Pods)
+## ------------------------------------------------------------------
+## WHY StatefulSet instead of Deployment?
+##   • Each Pod gets a STABLE hostname (mongo-0, mongo-1, mongo-2)
+##     that survives restarts — essential for MongoDB replica sets.
+##   • Each Pod gets its OWN PersistentVolume, so data is never lost
+##     even if the Pod is rescheduled to another Node.
+##
+## KEY CONCEPTS IN THIS FILE:
+##   podAntiAffinity   → Spreads Pods across different Nodes for HA.
+##   volumeClaimTemplates → Auto-creates a PersistentVolumeClaim for
+##                          every replica.
+##   numactl            → Optimises memory allocation on multi-CPU
+##                          servers (MongoDB best practice).
+##   --replSet rs0      → Tells MongoDB to join replica set "rs0".
+## ------------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: polling-platform
+  labels:
+    project: k8s-polling-platform
+    component: database
+spec:
+  serviceName: mongo                  # Must match the Headless Service name
+  replicas: 3                         # 1 Primary + 2 Secondaries
+  selector:
+    matchLabels:
+      role: db
+  template:
+    metadata:
+      labels:
+        role: db
+        env: demo
+        replicaset: rs0.main
+    spec:
+      ## --- Pod Anti-Affinity ---
+      ## Kubernetes will TRY to place each mongo Pod on a DIFFERENT
+      ## Node so that losing one Node doesn't kill the whole DB.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: replicaset
+                      operator: In
+                      values:
+                        - rs0.main
+                topologyKey: kubernetes.io/hostname
+
+      terminationGracePeriodSeconds: 10   # Gives Mongo time to flush
+
+      containers:
+        - name: mongo
+          image: mongo:4.2
+          command:
+            - "numactl"
+            - "--interleave=all"
+            - "mongod"
+            - "--wiredTigerCacheSizeGB"
+            - "0.1"                       # Low cache for demo clusters
+            - "--bind_ip"
+            - "0.0.0.0"
+            - "--replSet"
+            - "rs0"
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongodb-persistent-storage-claim
+              mountPath: /data/db
+
+  ## --- Volume Claim Templates ---
+  ## For each of the 3 replicas, Kubernetes will create a separate
+  ## PersistentVolumeClaim (PVC). On AWS EKS this uses gp2 EBS volumes.
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb-persistent-storage-claim
+      spec:
+        accessModes:
+          - ReadWriteOnce              # Only one Pod can mount this volume
+        storageClassName: gp2          # AWS EBS General Purpose SSD
+        resources:
+          requests:
+            storage: 0.5Gi             # 500 MB — enough for a demo
